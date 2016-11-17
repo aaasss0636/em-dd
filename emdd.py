@@ -3,10 +3,14 @@ import scipy.optimize
 import numpy
 import math
 import random
+import pprint
 from collections.abc import Sequence
 from collections import namedtuple
 
 EMDDResult = namedtuple('EMDDResult', ['target', 'scale', 'density'])
+PredictionResult = namedtuple('PredictionResult', ['bag', 'instances'])
+
+pp = pprint.PrettyPrinter(indent=4)
 
 
 class EMDD:
@@ -42,8 +46,8 @@ class EMDD:
 
             optimal_instances = []
             for bag in self.training_data.training_bags:
-                distances = EMDD.probability_of_closeness(target, scale, bag.instances)
-                optimal_instances.append(bag.instances[numpy.argmax(distances)])
+                probabilities = EMDD.positive_instance_probability(target, scale, bag.instances)
+                optimal_instances.append(bag.instances[numpy.argmax(probabilities)])
 
             if perform_scaling:
                 params = numpy.concatenate((target, scale))
@@ -87,7 +91,31 @@ class EMDD:
         return EMDDResult(target=target, scale=scale, density=density)
 
     @staticmethod
-    def probability_of_closeness(target, scale, instances):
+    def predict(results, bags, threshold, max=True):
+        prediction_results = []
+
+        if max is True:
+            result = sorted(results, key=lambda r: r.density)[::-1][0]
+        else:
+            result = sorted(results, key=lambda r: r.density)[0]
+
+        for i in range(0, len(bags)):
+
+            instances = []
+            probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
+            for j in range(0, len(probabilities)):
+                if probabilities[j] > threshold:
+                    instances.append(j)
+
+            if len(instances) > 0:
+                prediction_results.append(
+                    PredictionResult(bag=i, instances=instances)
+                )
+
+        return prediction_results
+
+    @staticmethod
+    def positive_instance_probability(target, scale, instances):
         x = numpy.tile(target, (len(instances), 1))
         s = numpy.tile(scale, (len(instances), 1))
         b_ij = numpy.array(list(map(lambda i: i.features, instances)))
@@ -105,7 +133,7 @@ class EMDD:
             target = params[0:instances[0].features.size]
             scale = params[instances[0].features.size:2 * instances[0].features.size]
 
-        p = EMDD.probability_of_closeness(target, scale, instances)
+        p = EMDD.positive_instance_probability(target, scale, instances)
 
         density = 0
         for i in range(0, len(instances)):
@@ -138,6 +166,8 @@ class MatlabTrainingData:
 class Bags(Sequence):
 
     def __init__(self, mat, bags_key, labels_key):
+        #pp.pprint(mat)
+
         self.bags = []
 
         mat_bags = mat[bags_key]
@@ -176,6 +206,10 @@ class Bag(Sequence):
 
     def random_unused_instance(self):
         unused_instances = [instance for instance in self.instances if instance.used_as_target is False]
+        if len(unused_instances) == 1:
+            for instance in self.instances:
+                instance.used_as_target = False
+
         return unused_instances[random.randrange(0, len(unused_instances))]
 
     def __getitem__(self, index):
@@ -194,6 +228,10 @@ class Instance:
         self.used_as_target = False
 
 
-emdd = EMDD(MatlabTrainingData('training-data/synth_data_1.mat'))
+training_data = MatlabTrainingData('training-data/synth_data_1.mat')
+emdd = EMDD(training_data)
 results = emdd.train(1.0e-03, perform_scaling=False, runs=100)
 print(sorted(results, key=lambda result: result.density)[::-1][0])
+
+#prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.8, max=True)
+#print("There are these many results:", len(prediction_results))
