@@ -32,7 +32,7 @@ class EMDD:
             random_instance.used_as_target = True
 
             results.append(self.run(
-                threshold, perform_scaling, random_instance.features, numpy.ones((1, random_instance.features.size))
+                threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
             ))
 
         return results
@@ -76,11 +76,11 @@ class EMDD:
 
             params = result.x
             if perform_scaling:
-                target = params[1:target.size]
+                target = params[0:target.size]
                 scale = params[target.size:2 * target.size]
             else:
                 target = params
-                scale = numpy.ones((1, target.size))
+                scale = numpy.ones(target.size)
 
             density = result.fun
             density_difference = previous_density - density
@@ -104,6 +104,7 @@ class EMDD:
             instances = []
             probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
             for j in range(0, len(probabilities)):
+                print("Instance", j, "in bag", i, "has probability", probabilities[j])
                 if probabilities[j] > threshold:
                     instances.append(j)
 
@@ -166,7 +167,7 @@ class MatlabTrainingData:
 class Bags(Sequence):
 
     def __init__(self, mat, bags_key, labels_key):
-        #pp.pprint(mat)
+        pp.pprint(mat)
 
         self.bags = []
 
@@ -230,8 +231,8 @@ class Instance:
 
 training_data = MatlabTrainingData('training-data/synth_data_1.mat')
 emdd = EMDD(training_data)
-results = emdd.train(1.0e-03, perform_scaling=False, runs=100)
+results = emdd.train(1.0e-03, perform_scaling=True, runs=100)
 print(sorted(results, key=lambda result: result.density)[::-1][0])
 
-#prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.8, max=True)
-#print("There are these many results:", len(prediction_results))
+prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.9, max=True)
+print("There are these many results:", len(prediction_results))
