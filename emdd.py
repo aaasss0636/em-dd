@@ -26,18 +26,16 @@ class EMDD:
                 instance.used_as_target = False
 
         for i in range(0, runs):
-            print("Run", i)
-
             random_instance = self.training_data.random_positive_training_bag().random_unused_instance()
             random_instance.used_as_target = True
 
             results.append(self.run(
-                threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
+                i, threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
             ))
 
         return results
 
-    def run(self, threshold, perform_scaling, target, scale):
+    def run(self, run, threshold, perform_scaling, target, scale):
         density_difference = math.inf
         previous_density = math.inf
         density = 0
@@ -86,7 +84,7 @@ class EMDD:
             density_difference = previous_density - density
             previous_density = density
 
-            print("Density difference:", density_difference)
+            print("Run ", run, "Target:", target, "Scale:", scale, "Density difference:", density_difference)
 
         return EMDDResult(target=target, scale=scale, density=density)
 
@@ -154,13 +152,21 @@ class EMDD:
 
 class MatlabTrainingData:
 
-    def __init__(self, file_name):
+    def __init__(self, file_name, has_test_data=True):
         self.training_bags = Bags(scipy.io.loadmat(file_name), "bag", "labels")
-        self.test_bags = []
-        #self.test_bags = Bags(scipy.io.loadmat(file_name), "testBags", "testlabels")
+        if has_test_data is True:
+            self.test_bags = Bags(scipy.io.loadmat(file_name), "testBags", "testlabels")
+
+    @staticmethod
+    def test_only(file_name):
+        return MatlabTrainingData(file_name=file_name, has_test_data=False)
+
+    @staticmethod
+    def test_and_training(file_name):
+        return MatlabTrainingData(file_name=file_name)
 
     def random_positive_training_bag(self):
-        positive_training_bags = [bag for bag in self.training_bags if bag.is_positive()]
+        positive_training_bags = [bag for bag in self.training_bags if bag.is_positive() and bag.is_unused()]
         return positive_training_bags[random.randrange(0, len(positive_training_bags))]
 
 
@@ -205,11 +211,11 @@ class Bag(Sequence):
     def is_positive(self):
         return self.label == 1
 
+    def is_unused(self):
+        return len([instance for instance in self.instances if instance.used_as_target is False]) > 0
+
     def random_unused_instance(self):
         unused_instances = [instance for instance in self.instances if instance.used_as_target is False]
-        if len(unused_instances) == 1:
-            for instance in self.instances:
-                instance.used_as_target = False
 
         return unused_instances[random.randrange(0, len(unused_instances))]
 
@@ -229,10 +235,14 @@ class Instance:
         self.used_as_target = False
 
 
-training_data = MatlabTrainingData('training-data/synth_data_1.mat')
+training_data = MatlabTrainingData.test_and_training('training-data/DR_data.mat')
+runs = len([bag for bag in training_data.training_bags if bag.is_positive()]) * len(training_data.training_bags[0].instances)
+
+print(runs, "runs")
+
 emdd = EMDD(training_data)
-results = emdd.train(1.0e-03, perform_scaling=True, runs=100)
+results = emdd.train(1.0e-03, perform_scaling=True, runs=runs)
 print(sorted(results, key=lambda result: result.density)[::-1][0])
 
-prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.9, max=True)
+prediction_results = EMDD.predict(results=results, bags=training_data.test_bags, threshold=0.5, max=True)
 print("There are these many results:", len(prediction_results))
