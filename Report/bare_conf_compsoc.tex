@@ -15,6 +15,7 @@
   \usepackage{xspace}
   \usepackage{listings}
   \usepackage{upquote}
+  \usepackage{amsmath}
   \usepackage[hidelinks]{hyperref}
   \usepackage{wrapfig}
   \graphicspath{ {/Users/tejasK/Documents/ASU Coursework/FSL/Project/IEEEtran/} }
@@ -55,7 +56,7 @@
 
 \begin{document}
 
-\title{Multiple Instances Learning - EMDD}
+\title{Multiple Instance Learning using EMDD}
 
 \author{\IEEEauthorblockN{Tejas Khairnar}
 \IEEEauthorblockA{Arizona State University\\
@@ -68,19 +69,29 @@ Email: tkhairna@asu.edu}}
 \maketitle
 
 \begin{abstract}
-In this midterm report for CSE 569 Fundamentals of Statistical Learning we are trying to perform Image categorization using Estimation Maximization Diverse Density Algorithm(EMDD). Multiple-Instances Learning (MIL) is a generalization of the supervised learning classification problem. Using EMDD algorithm we classify the instances in the given data set as positive instances or a negative instance. [Our algorithm calculates the probability of the instance to be a positive or negative instance].
+This midterm report details our understanding, approach, and progress in implementing the Estimation Maximization Diverse Density (EMDD)\cite{zhang2001dd} algorithm. EMDD is an approach that has seen success in Multiple-Instances Learning problems and is a generalization of the supervised-learning classification-problem. Our goal is to demonstrate an understanding of this algorithm by providing a valid implementation and demonstrating its performance against the supplied data sets.
 \end{abstract}
 
 
 \IEEEpeerreviewmaketitle
 
 
-
 \section{Introduction}
 % no \IEEEPARstart
-Multiple Instances Learning (MIL) is proposed as a variation of supervised learning for problems with incomplete knowledge about labels of training examples. In supervised learning, every training instance is assigned with a discrete or real-valued label. In MIL the labels are only assigned to bags of instances. In the binary case, a bag is labeled positive if at least one instance in that bag is positive, and the bag is labeled negative if all the instance in it are negative There are no labels on the individual instances. The goal of MIL is to classify unseen bags or instances based on the labeled bags as the training data. For this specific project we focus on EMDD algorithm to perform the traning and categorization~\cite{chen2004image}. However, we also compare this implementation of ours with various other implementations of MIL algorithms.
+The Multiple Instances Learning (MIL) problem is a variation of the general supervised-learning classification-problem. In MIL, instead of presenting a single instance, a bag of instances is presented to the algorithm, along with a label that describes the bag as either positive or negative. A bag is given a positive label if it contains at least one positive instance, and a negative label if it does not contain any positive instances. The goal of the MIL problem then, is to classify unseen bags or instances as either positive or negative, based on the training data. For this project, we specifically focus on the EMDD algorithm and use it to solve the MIL problem. 
 
-\section{Understanding}
+\section{EMDD}
+
+Before looking at the EMDD algorithm, it is useful to look at diverse density itself. If we assume that there is a hypothetical point $t$ in the feature space that identifies the "true concept", the goal of DD is to identify the region that has positive instances from the most number of \textit{different} positive bags, while also being far away from negative instances. Hence the diverse-density problem involves maximizing the probability $P(x = t \mid B_1^+, \dots, B_n^+, B_1^-, \dots, B_m^-)$, where $B_i^+$ is a positive bag and $B_j^-$ is a negative bag. This is effectively equivalent to maximizing the following\cite{zhang2001dd}:
+
+\begin{equation}
+\arg\max_x \prod_i P(x = t \mid B_i^+) \prod_i P(x = t \mid B_i^-)
+\end{equation}
+
+From this general definition of the maximum diverse-density, a noisy-or model is used to define the terms in the products. Hence the probability all points did not miss the target is $P(x = t \mid B_i^+) = P(x = t \mid B^+_{i1}, B^+_{i2}, \dots) = 1 - \prod_j(1 - P(x =t \mid B^+_{ij}))$ and likewise $P(x = t \mid B_i^-) = \prod_j(1 - P(x = t \mid B_{ij}^-))$. The probability of a particular instance being the potential target-instance is then based on the distance between them: $P(x = t \mid B_{ij}) = \exp(- \left\| B_{ij} - x \right\|^2)$. The intuition is that if one of the instances in a positive bag is close to $x$, then $P(x = t \mid B_i^+)$ is high. Hence, if all positive bags have an instance close to $x$ and no negative ones do, the diverse density of $x$ will be high. Also observe that while the diverse density at the intersection of $n$ bags is exponentially higher than at $n - 1$ bags, the presence of a single negative instance is enough to drive down the diverse density.
+
+The diverse density formulation also takes into account the relevance of features learning a scaling vector $s$ in addition to the location $x$ that maximizes the diverse density ($\left\| B_{ij} - x \right\|^2 = \sum_k s_k^2(B_{ijk} - x_k)^2$). This allows the algorithm to disregard irrelevant features and consider important ones, especially considering that it uses the Euclidean distance as a metric for "closeness". 
+
 \subsection{Diverse Density Algorithm}
 The main idea of DD approach is to find a concept point in the feature space that are close to at-least one instance from every positive bag and meanwhile far away from instances in negative bags~\cite{MILlink}. The optimal concept point is defined as the one with maximum density, which is a measure of how many different positive bags have instances near the point, and how far the negative instances are from that point.
 \subsection{Estimation Maximization}
