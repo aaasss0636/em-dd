@@ -81,7 +81,7 @@ class EMDD:
                 scale = numpy.ones(target.size)
 
             density = result.fun
-            density_difference = previous_density - density
+            density_difference = abs(previous_density - density)
             previous_density = density
 
             print("Run ", run, "Target:", target, "Scale:", scale, "Density difference:", density_difference)
@@ -235,7 +235,7 @@ class Instance:
         self.used_as_target = False
 
 
-training_data = MatlabTrainingData.test_and_training('training-data/DR_data.mat')
+training_data = MatlabTrainingData.test_only('training-data/synth_data_1.mat')
 runs = len([bag for bag in training_data.training_bags if bag.is_positive()]) * len(training_data.training_bags[0].instances)
 
 print(runs, "runs")
@@ -244,5 +244,5 @@ emdd = EMDD(training_data)
 results = emdd.train(1.0e-03, perform_scaling=True, runs=runs)
 print(sorted(results, key=lambda result: result.density)[::-1][0])
 
-prediction_results = EMDD.predict(results=results, bags=training_data.test_bags, threshold=0.5, max=True)
+prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.6, max=True)
 print("There are these many results:", len(prediction_results))
