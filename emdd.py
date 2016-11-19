@@ -81,7 +81,7 @@ class EMDD:
                 scale = numpy.ones(target.size)
 
             density = result.fun
-            density_difference = abs(previous_density - density)
+            density_difference = (previous_density - density)
             previous_density = density
 
             print("Run ", run, "Target:", target, "Scale:", scale, "Density difference:", density_difference)
@@ -102,7 +102,7 @@ class EMDD:
             instances = []
             probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
             for j in range(0, len(probabilities)):
-                print("Instance", j, "in bag", i, "has probability", probabilities[j])
+                #print("Instance", j, "in bag", i, "has probability", probabilities[j])
                 if probabilities[j] > threshold:
                     instances.append(j)
 
@@ -236,7 +236,9 @@ class Instance:
 
 
 training_data = MatlabTrainingData.test_only('training-data/synth_data_1.mat')
-runs = len([bag for bag in training_data.training_bags if bag.is_positive()]) * len(training_data.training_bags[0].instances)
+#runs = len([bag for bag in training_data.training_bags if bag.is_positive()]) * len(training_data.training_bags[0].instances)
+
+runs = 100
 
 print(runs, "runs")
 
@@ -244,5 +246,32 @@ emdd = EMDD(training_data)
 results = emdd.train(1.0e-03, perform_scaling=True, runs=runs)
 print(sorted(results, key=lambda result: result.density)[::-1][0])
 
-prediction_results = EMDD.predict(results=results, bags=training_data.training_bags, threshold=0.6, max=True)
-print("There are these many results:", len(prediction_results))
+test_bags = training_data.training_bags
+
+prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=0.5, max=True)
+
+actual_positive_instances = len([bag for bag in test_bags if bag.is_positive()])
+
+true_positives = 0
+false_positives = 0
+
+positive_bag_indexes = list(map(lambda x: x.index, [bag for bag in test_bags if bag.is_positive()]))
+predicted_positive_bag_indexes = []
+
+for prediction_result in prediction_results:
+
+    predicted_positive_bag_indexes.append(prediction_result.bag)
+    if test_bags[prediction_result.bag].is_positive():
+        true_positives += 1
+    else:
+        false_positives += 1
+
+false_negatives = len([index for index in positive_bag_indexes if index not in predicted_positive_bag_indexes])
+
+print("Total positive bags", actual_positive_instances)
+print("Total predicted positive bags", len(prediction_results))
+print("Correctly-classified bags", true_positives)
+print("False positive", false_positives)
+print("False negatives", false_negatives)
+print("Precision", true_positives / (true_positives + false_positives))
+print("Recall", true_positives / (true_positives + false_negatives))
