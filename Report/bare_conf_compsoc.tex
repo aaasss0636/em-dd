@@ -99,6 +99,8 @@ We successfully implemented the EM-DD algorithm using the Python programming-lan
 	\item Citation-kNN for MIL
 \end{itemize}
 
+Most issues that we ran into were due to unfamiliarity with SciPy, and were quickly resolved. One issue that we are currently dealing with is that our implementation doesn't seem to have as high as a precision as we would like on the synthetic data-set. We noticed that in the MatLab implementation, the \texttt{fpmincon} function was used, which doesn't have a very performant equivalent in SciPy; currently we are using an optimizer that performs gradient-ascent using the limited-memory variant of BFGS search with a numerically-estimated gradient. Documentation in the SciPy optimizer suggests that providing a function that calculates the gradient might provide better results than a numerically-estimated gradient. We are planning to implement this suggestion to see if it has a positive impact on our performance.
+
 \subsection{Timeline}
 
 % Please add the following required packages to your document preamble:
