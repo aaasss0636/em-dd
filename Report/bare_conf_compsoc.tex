@@ -101,6 +101,8 @@ We successfully implemented the EM-DD algorithm using the Python programming-lan
 
 Most issues that we ran into were due to unfamiliarity with SciPy, and were quickly resolved. One issue that we are currently dealing with is that our implementation doesn't seem to have as high as a precision as we would like on the synthetic data-set. We noticed that in the MatLab implementation, the \texttt{fpmincon} function was used, which doesn't have a very performant equivalent in SciPy; currently we are using an optimizer that performs gradient-ascent using the limited-memory variant of BFGS search with a numerically-estimated gradient. Documentation in the SciPy optimizer suggests that providing a function that calculates the gradient might provide better results than a numerically-estimated gradient. We are planning to implement this suggestion to see if it has a positive impact on our performance.
 
+Another discrepancy we noticed was that by default, the EM-DD algorithm as implemented in the MILL toolkit, uses the average of the estimated target and scale vectors from each training-run during prediction. In contrast, our implementation uses the target and scale vector corresponding to the highest diverse-density. We feel that this could be a source of the discrepancy in results and plan to investigate this further.
+
 \subsection{Timeline}
 
 % Please add the following required packages to your document preamble:
