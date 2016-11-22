@@ -379,7 +379,14 @@ def load_fake_data(mat):
         "test_bags": bags
     }
 
-training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data)
+# Comment and uncomment as needed
+
+training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data) # for fake data
+#training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data) # musk1
+#training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
+#training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
+#training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
+#training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
 
 runs = 10
 
