@@ -6,6 +6,8 @@ import random
 import pprint
 from collections.abc import Sequence
 from collections import namedtuple
+from enum import Enum
+from functools import reduce
 
 EMDDResult = namedtuple('EMDDResult', ['target', 'scale', 'density'])
 PredictionResult = namedtuple('PredictionResult', ['bag', 'instances'])
@@ -13,12 +15,60 @@ PredictionResult = namedtuple('PredictionResult', ['bag', 'instances'])
 pp = pprint.PrettyPrinter(indent=4)
 
 
+class Aggregate(Enum):
+    min = 1
+    max = 2
+    avg = 3
+
+
 class EMDD:
 
     def __init__(self, training_data):
         self.training_data = training_data
 
-    def train(self, threshold, perform_scaling=False, runs=1000):
+    @staticmethod
+    def predict(results, bags, threshold, aggregate=Aggregate.avg):
+        prediction_results = []
+
+        if aggregate == Aggregate.max:
+            result = sorted(results, key=lambda r: r.density)[::-1][0]
+        elif aggregate == Aggregate.min:
+            result = sorted(results, key=lambda r: r.density)[0]
+        else:
+            result_sum = reduce(
+                lambda x, y: EMDDResult(
+                    target=x.target + y.target,
+                    scale=x.scale + y.scale,
+                    density=x.density + y.density
+                ), results
+            )
+            result = EMDDResult(
+                target=result_sum.target / len(results),
+                scale=result_sum.scale / len(results),
+                density=result_sum.density / len(results)
+            )
+
+        print("Using result", result, "for prediction")
+
+        for i in range(0, len(bags)):
+
+            instances = []
+            instance_probabilities = []
+            probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
+            for j in range(0, len(probabilities)):
+                if probabilities[j] > threshold:
+                    instances.append(j)
+                    instance_probabilities.append(probabilities[j])
+
+            if len(instances) > 0:
+                #print("Bag", i, "is positive with instances", instances, "and probabilities", instance_probabilities)
+                prediction_results.append(
+                    PredictionResult(bag=i, instances=instances)
+                )
+
+        return prediction_results
+
+    def train(self, threshold, perform_scaling=False, runs=10, k=5):
         results = []
 
         for bag in self.training_data.training_bags:
@@ -26,16 +76,23 @@ class EMDD:
                 instance.used_as_target = False
 
         for i in range(0, runs):
-            random_instance = self.training_data.random_positive_training_bag().random_unused_instance()
-            random_instance.used_as_target = True
+            run_results = []
 
-            results.append(self.run(
-                i, threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
-            ))
+            for j in range(0, k):
+                random_instance = self.training_data.random_positive_training_bag().random_unused_instance()
+                random_instance.used_as_target = True
+
+                run_results.append(self.run(
+                    threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
+                ))
+
+            best_result = sorted(run_results, key=lambda r: r.density)[0]
+            print("Run", i, "Target:", best_result.target, "Scale:", best_result.scale, "Density", best_result.density)
+            results.append(best_result)
 
         return results
 
-    def run(self, run, threshold, perform_scaling, target, scale):
+    def run(self, threshold, perform_scaling, target, scale):
         density_difference = math.inf
         previous_density = math.inf
         density = 0
@@ -45,6 +102,7 @@ class EMDD:
             optimal_instances = []
             for bag in self.training_data.training_bags:
                 probabilities = EMDD.positive_instance_probability(target, scale, bag.instances)
+                #print("run", run, "positive", bag.is_positive(), "bag", bag.index, "instance", numpy.argmax(probabilities), "probability", probabilities[numpy.argmax(probabilities)])
                 optimal_instances.append(bag.instances[numpy.argmax(probabilities)])
 
             if perform_scaling:
@@ -61,14 +119,15 @@ class EMDD:
 
             result = scipy.optimize.minimize(
                 fun=EMDD.diverse_density,
+                jac=EMDD.diverse_density_gradient,
                 x0=params,
                 args=optimal_instances,
                 bounds=bounds,
                 method='L-BFGS-B',
                 options={
-                    'ftol': 1.0e-03,
-                    'maxfun': 50000,
-                    'maxiter': 1000,
+                    'ftol': 1.0e-06,
+                    'maxfun': 100000,
+                    'maxiter': 2000,
                 }
             )
 
@@ -84,34 +143,7 @@ class EMDD:
             density_difference = (previous_density - density)
             previous_density = density
 
-            print("Run ", run, "Target:", target, "Scale:", scale, "Density difference:", density_difference)
-
         return EMDDResult(target=target, scale=scale, density=density)
-
-    @staticmethod
-    def predict(results, bags, threshold, max=True):
-        prediction_results = []
-
-        if max is True:
-            result = sorted(results, key=lambda r: r.density)[::-1][0]
-        else:
-            result = sorted(results, key=lambda r: r.density)[0]
-
-        for i in range(0, len(bags)):
-
-            instances = []
-            probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
-            for j in range(0, len(probabilities)):
-                #print("Instance", j, "in bag", i, "has probability", probabilities[j])
-                if probabilities[j] > threshold:
-                    instances.append(j)
-
-            if len(instances) > 0:
-                prediction_results.append(
-                    PredictionResult(bag=i, instances=instances)
-                )
-
-        return prediction_results
 
     @staticmethod
     def positive_instance_probability(target, scale, instances):
@@ -125,12 +157,15 @@ class EMDD:
 
     @staticmethod
     def diverse_density(params, instances):
-        if params.size == instances[0].features.size:
+        num_features = instances[0].features.size
+        scaling = params.size != num_features
+
+        if not scaling:
             target = params
-            scale = numpy.ones((1, instances[0].features.size))
+            scale = numpy.ones(num_features)
         else:
-            target = params[0:instances[0].features.size]
-            scale = params[instances[0].features.size:2 * instances[0].features.size]
+            target = params[0:num_features]
+            scale = params[num_features:2 * num_features]
 
         p = EMDD.positive_instance_probability(target, scale, instances)
 
@@ -149,21 +184,59 @@ class EMDD:
 
         return density
 
+    @staticmethod
+    def diverse_density_gradient(params, instances):
+        num_features = instances[0].features.size
+        scaling = params.size != num_features
+
+        if not scaling:
+            target = params
+            scale = numpy.ones(num_features)
+            gradient = numpy.zeros(num_features)
+        else:
+            target = params[0:num_features]
+            scale = params[num_features:2 * num_features]
+            gradient = numpy.zeros(2 * num_features)
+
+        p = EMDD.positive_instance_probability(target, scale, instances)
+
+        for d in range(0, num_features):
+            for i in range(0, len(instances)):
+                if instances[i].bag.is_positive():
+                    if p[i] == 0:
+                        p[i] = 1.0e-10
+
+                    gradient[d] -= (2 / num_features) * \
+                                   (scale[d] ** 2) * \
+                                   (instances[i].features[d] - target[d])
+
+                    if scaling:
+                        gradient[d + num_features] += (2 / num_features) * scale[d] * \
+                                                      ((instances[i].features[d] - target[d]) ** 2)
+                else:
+                    if p[i] == 1:
+                        p[i] = 1 - 1.0e-10
+
+                    gradient[d] += (1 / (1 - p[i])) * \
+                                   (2 / num_features) * \
+                                   (scale[d] ** 2) * \
+                                   (instances[i].features[d] - target[d])
+
+                    if scaling:
+                        gradient[d + num_features] -= (1 / (1 - p[i])) * \
+                                                      (2 / num_features) * scale[d] * \
+                                                      ((instances[i].features[d] - target[d]) ** 2)
+
+        return gradient
+
 
 class MatlabTrainingData:
 
-    def __init__(self, file_name, has_test_data=True):
-        self.training_bags = Bags(scipy.io.loadmat(file_name), "bag", "labels")
-        if has_test_data is True:
-            self.test_bags = Bags(scipy.io.loadmat(file_name), "testBags", "testlabels")
+    def __init__(self, file_name, handler):
+        data = handler(scipy.io.loadmat(file_name))
 
-    @staticmethod
-    def test_only(file_name):
-        return MatlabTrainingData(file_name=file_name, has_test_data=False)
-
-    @staticmethod
-    def test_and_training(file_name):
-        return MatlabTrainingData(file_name=file_name)
+        self.training_bags = data["training_bags"]
+        self.test_bags = data["test_bags"]
 
     def random_positive_training_bag(self):
         positive_training_bags = [bag for bag in self.training_bags if bag.is_positive() and bag.is_unused()]
@@ -172,24 +245,8 @@ class MatlabTrainingData:
 
 class Bags(Sequence):
 
-    def __init__(self, mat, bags_key, labels_key):
-        pp.pprint(mat)
-
-        self.bags = []
-
-        mat_bags = mat[bags_key]
-        it_bags = numpy.nditer(mat_bags, ["refs_ok", "c_index"])
-        while not it_bags.finished:
-            mat_bag = mat_bags[0][it_bags.index]
-            label = mat[labels_key][0][it_bags.index]
-
-            bag = Bag(it_bags.index, label)
-            for instance in mat_bag:
-                bag.add_instance(instance)
-
-            self.bags.append(bag)
-
-            it_bags.iternext()
+    def __init__(self, bags):
+        self.bags = bags
 
     def __getitem__(self, index):
         return self.bags[index]
@@ -235,20 +292,107 @@ class Instance:
         self.used_as_target = False
 
 
-training_data = MatlabTrainingData.test_only('training-data/synth_data_1.mat')
-#runs = len([bag for bag in training_data.training_bags if bag.is_positive()]) * len(training_data.training_bags[0].instances)
+def load_data(mat, bags_key, labels_key):
+    bags = []
 
-runs = 100
+    mat_bags = mat[bags_key]
+    it_bags = numpy.nditer(mat_bags, ["refs_ok", "c_index"])
+    while not it_bags.finished:
+        mat_bag = mat_bags[0][it_bags.index]
+        label = mat[labels_key][0][it_bags.index]
+
+        bag = Bag(it_bags.index, label)
+        for instance in mat_bag:
+            bag.add_instance(instance)
+
+        bags.append(bag)
+
+        it_bags.iternext()
+
+    return bags
+
+
+def load_synth_data(mat):
+    return {
+        "training_bags": load_data(mat, "bag", "labels"),
+        "test_bags": []
+    }
+
+
+def load_dr_data(mat):
+    return {
+        "training_bags": load_data(mat, "bag", "labels"),
+        "test_bags": load_data(mat, "testBags", "testlabels"),
+    }
+
+
+def load_musk_data(mat):
+    pp.pprint(mat)
+
+    bag_map = {}
+    it_bag_ids = numpy.nditer(mat["bag_ids"], ["refs_ok", "c_index"])
+    while not it_bag_ids.finished:
+        bag_index = mat["bag_ids"][0][it_bag_ids.index]
+        if bag_index not in bag_map:
+            bag_map[bag_index] = Bag(bag_index, -1)
+
+        bag = bag_map[bag_index]
+        bag.add_instance(numpy.array(mat["features"][it_bag_ids.index].A[0]))
+
+        if not bag.is_positive() and mat["labels"].A[0][it_bag_ids.index] == 1:
+            bag.label = 1
+
+        it_bag_ids.iternext()
+
+    return {
+        "training_bags": list(bag_map.values()),
+        "test_bags": list(bag_map.values())
+    }
+
+
+def load_fake_data(mat):
+    positive_instance = numpy.array([1, 0, 1, 1, 0])
+    negative_instance = numpy.array([0, 1, 0, 0, 0])
+
+    bags = []
+    for i in range(0, 100):
+        bag = Bag(i, i % 2)
+        if i % 2 == 0:
+            for j in range(0, 10):
+                bag.add_instance(negative_instance)
+        else:
+            num_positive = random.randrange(0, 5) + 1
+            for j in range(0, num_positive):
+                bag.add_instance(positive_instance)
+
+            for j in range(0, 10 - num_positive):
+                bag.add_instance(negative_instance)
+
+        bags.append(bag)
+
+        print("bag", i, bag.is_positive(), "has instances")
+        for instance in bag.instances:
+            print("    instance", instance.features)
+
+    return {
+        "training_bags": bags,
+        "test_bags": bags
+    }
+
+training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data)
+
+runs = 10
 
 print(runs, "runs")
 
 emdd = EMDD(training_data)
-results = emdd.train(1.0e-03, perform_scaling=True, runs=runs)
-print(sorted(results, key=lambda result: result.density)[::-1][0])
+results = emdd.train(0.1, perform_scaling=True, runs=runs)
 
 test_bags = training_data.training_bags
 
-prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=0.5, max=True)
+threshold = 0.5
+
+prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=threshold, aggregate=Aggregate.min)
 
 actual_positive_instances = len([bag for bag in test_bags if bag.is_positive()])
 
@@ -268,6 +412,8 @@ for prediction_result in prediction_results:
 
 false_negatives = len([index for index in positive_bag_indexes if index not in predicted_positive_bag_indexes])
 
+print("Threshold", threshold)
+print("Total bags", len(test_bags))
 print("Total positive bags", actual_positive_instances)
 print("Total predicted positive bags", len(prediction_results))
 print("Correctly-classified bags", true_positives)
