@@ -377,13 +377,6 @@ def load_animal_data(mat):
     }
 
 
-def load_elephant_data(mat):
-    return {
-        "training_bags": load_animal_data(mat),
-        "test_bags": []
-    }
-
-
 def load_fake_data(mat):
     positive_instance = numpy.array([1, 0, 1, 1, 0])
     negative_instance = numpy.array([0, 1, 0, 0, 0])
@@ -420,8 +413,10 @@ def load_fake_data(mat):
 #training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
 #training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
-#training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
-training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_elephant_data) # elephant
+training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
+#training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_animal_data) # elephant
+#training_data = MatlabTrainingData('training-data/fox_100x100_matlab.mat', load_animal_data) # fox
+#training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
 
 runs = 10
 
@@ -434,7 +429,7 @@ test_bags = training_data.training_bags
 
 threshold = 0.5
 
-prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=threshold, aggregate=Aggregate.min)
+prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=threshold, aggregate=Aggregate.avg)
 
 actual_positive_instances = len([bag for bag in test_bags if bag.is_positive()])
 
