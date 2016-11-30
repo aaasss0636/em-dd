@@ -302,8 +302,12 @@ def load_data(mat, bags_key, labels_key):
         label = mat[labels_key][0][it_bags.index]
 
         bag = Bag(it_bags.index, label)
+        i = 0
         for instance in mat_bag:
             bag.add_instance(instance)
+            inst_list = list(map(lambda x: str(x), instance.tolist()))
+            #print("INST_{}_{},BAG_{},{},{}".format(i, it_bags.index, it_bags.index, label, ",".join(inst_list)))
+            i += 1
 
         bags.append(bag)
 
@@ -350,6 +354,36 @@ def load_musk_data(mat):
     }
 
 
+def load_animal_data(mat):
+    pp.pprint(mat)
+    bag_map = {}
+    it_bag_ids = numpy.nditer(mat["bag_ids"], ["refs_ok", "c_index"])
+    while not it_bag_ids.finished:
+        bag_index = mat["bag_ids"][0][it_bag_ids.index]
+        if bag_index not in bag_map:
+            bag_map[bag_index] = Bag(bag_index, -1)
+
+        bag = bag_map[bag_index]
+        bag.add_instance(numpy.array(mat["features"][it_bag_ids.index].A[0]))
+
+        if not bag.is_positive() and mat["labels"].A[0][it_bag_ids.index] == 1:
+            bag.label = 1
+
+        it_bag_ids.iternext()
+
+    return {
+        "training_bags": list(bag_map.values()),
+        "test_bags": list(bag_map.values())
+    }
+
+
+def load_elephant_data(mat):
+    return {
+        "training_bags": load_animal_data(mat),
+        "test_bags": []
+    }
+
+
 def load_fake_data(mat):
     positive_instance = numpy.array([1, 0, 1, 1, 0])
     negative_instance = numpy.array([0, 1, 0, 0, 0])
@@ -381,12 +415,13 @@ def load_fake_data(mat):
 
 # Comment and uncomment as needed
 
-training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data) # for fake data
+#training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data) # for fake data
 #training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
 #training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
 #training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
+training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_elephant_data) # elephant
 
 runs = 10
 
@@ -407,6 +442,7 @@ true_positives = 0
 false_positives = 0
 
 positive_bag_indexes = list(map(lambda x: x.index, [bag for bag in test_bags if bag.is_positive()]))
+negative_bag_indexes = list(map(lambda x: x.index, [bag for bag in test_bags if not bag.is_positive()]))
 predicted_positive_bag_indexes = []
 
 for prediction_result in prediction_results:
@@ -418,13 +454,17 @@ for prediction_result in prediction_results:
         false_positives += 1
 
 false_negatives = len([index for index in positive_bag_indexes if index not in predicted_positive_bag_indexes])
+true_negatives = len([index for index in negative_bag_indexes if index not in predicted_positive_bag_indexes])
 
 print("Threshold", threshold)
 print("Total bags", len(test_bags))
 print("Total positive bags", actual_positive_instances)
+print("Total negative bags", len(negative_bag_indexes))
 print("Total predicted positive bags", len(prediction_results))
-print("Correctly-classified bags", true_positives)
-print("False positive", false_positives)
+print("Total predicted negative bags", true_negatives)
+print("True positives", true_positives)
+print("False positives", false_positives)
 print("False negatives", false_negatives)
+print("Accuracy", (true_positives + true_negatives) / len(test_bags))
 print("Precision", true_positives / (true_positives + false_positives))
 print("Recall", true_positives / (true_positives + false_negatives))
