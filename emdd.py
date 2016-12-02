@@ -149,6 +149,8 @@ class EMDD:
 
                     instance_number += 1
 
+            print("")
+
             accuracy = 0
             for partition_result in partition_results:
                 prediction_result = EMDD.classify(validation_set, partition_result.target, partition_result.scale)
