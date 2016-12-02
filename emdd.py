@@ -99,6 +99,16 @@ class EMDD:
                 else:
                     true_negatives += 1
 
+        if true_positives == 0 and false_positives == 0:
+            precision = 1
+        else:
+            precision = true_positives / (true_positives + false_positives)
+
+        if true_positives == 0 and false_negatives == 0:
+            recall = 0
+        else:
+            recall = true_positives / (true_positives + false_negatives)
+
         return PredictionResult(
             bags=positive_bag_indexes,
             actual_positive_bags=actual_positive_bags,
@@ -108,8 +118,8 @@ class EMDD:
             false_positives=false_positives,
             false_negatives=false_negatives,
             accuracy=(true_positives + true_negatives) / total_bags,
-            precision=true_positives / (true_positives + false_positives),
-            recall=true_positives / (true_positives + false_negatives)
+            precision=precision,
+            recall=recall
         )
 
     def train(self, perform_scaling=False, k=5):
