@@ -115,11 +115,11 @@ class EMDD:
     def train(self, perform_scaling=False, k=5):
         results = []
 
-        for bag in self.training_data.training_bags:
-            for instance in bag.instances:
-                instance.used_as_target = False
-
         for partition_number in range(0, 10):
+            for bag in self.training_data.training_bags:
+                for instance in bag.instances:
+                    instance.used_as_target = False
+
             partition_results = []
 
             validation_and_training_set = self.training_data.validation_and_training_set(partition_number)
@@ -130,8 +130,16 @@ class EMDD:
                 map(lambda x: self.training_data.random_positive_training_bag(partition_number), range(0, k))
             )
 
+            instances_per_bag = len(self.training_data.training_bags[0].instances)
+            print("Cross-validation on partition", partition_number, "with", instances_per_bag * k, "instances")
+            instance_number = 1
             for random_positive_bag in random_positive_bags:
                 for instance in random_positive_bag:
+                    if instance_number % 5 == 0:
+                        print(instance_number, end="", flush=True)
+                    else:
+                        print(".", end="", flush=True)
+
                     partition_results.append(self.run(
                         perform_scaling,
                         training_set,
@@ -187,8 +195,8 @@ class EMDD:
                 method='L-BFGS-B',
                 options={
                     'ftol': 1.0e-06,
-                    'maxfun': 100000,
-                    'maxiter': 2000,
+                    'maxfun': 50000,
+                    'maxiter': 1000,
                 }
             )
 
@@ -321,7 +329,6 @@ class MatlabTrainingData:
 
     def random_positive_training_bag(self, partition_number):
         training_set = self.validation_and_training_set(partition_number)["training_set"]
-
         positive_training_bags = [bag for bag in training_set if bag.is_positive() and bag.is_unused()]
         return positive_training_bags[random.randrange(0, len(positive_training_bags))]
 
@@ -515,7 +522,6 @@ emdd = EMDD(training_data)
 training_results = emdd.train(perform_scaling=True)
 
 test_bags = training_data.training_bags
-
 
 prediction_result = EMDD.predict(results=training_results, bags=test_bags, aggregate=Aggregate.avg)
 
