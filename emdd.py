@@ -10,9 +10,23 @@ from enum import Enum
 from functools import reduce
 
 EMDDResult = namedtuple('EMDDResult', ['target', 'scale', 'density'])
-PredictionResult = namedtuple('PredictionResult', ['bag', 'instances'])
+PredictionResult = namedtuple('PredictionResult', [
+    'bags',
+    'actual_positive_bags',
+    'actual_negative_bags',
+    'true_positives',
+    'true_negatives',
+    'false_positives',
+    'false_negatives',
+    'accuracy',
+    'precision',
+    'recall'
+])
 
 pp = pprint.PrettyPrinter(indent=4)
+
+prediction_threshold = 0.5
+training_threshold = 0.1
 
 
 class Aggregate(Enum):
@@ -27,9 +41,7 @@ class EMDD:
         self.training_data = training_data
 
     @staticmethod
-    def predict(results, bags, threshold, aggregate=Aggregate.avg):
-        prediction_results = []
-
+    def predict(results, bags, aggregate=Aggregate.avg):
         if aggregate == Aggregate.max:
             result = sorted(results, key=lambda r: r.density)[::-1][0]
         elif aggregate == Aggregate.min:
@@ -49,58 +61,107 @@ class EMDD:
             )
 
         print("Using result", result, "for prediction")
+        return EMDD.classify(bags, result.target, result.scale)
 
+    @staticmethod
+    def classify(bags, target, scale):
+        total_bags = len(bags)
+        actual_positive_bags = len([bag for bag in bags if bag.is_positive()])
+        actual_negative_bags = total_bags - actual_positive_bags
+
+        true_positives = 0
+        true_negatives = 0
+
+        false_positives = 0
+        false_negatives = 0
+
+        positive_bag_indexes = []
         for i in range(0, len(bags)):
-
             instances = []
             instance_probabilities = []
-            probabilities = EMDD.positive_instance_probability(result.target, result.scale, bags[i].instances)
+            probabilities = EMDD.positive_instance_probability(target, scale, bags[i].instances)
             for j in range(0, len(probabilities)):
-                if probabilities[j] > threshold:
+                if probabilities[j] > prediction_threshold:
                     instances.append(j)
                     instance_probabilities.append(probabilities[j])
 
             if len(instances) > 0:
-                #print("Bag", i, "is positive with instances", instances, "and probabilities", instance_probabilities)
-                prediction_results.append(
-                    PredictionResult(bag=i, instances=instances)
-                )
+                if bags[i].is_positive():
+                    true_positives += 1
+                else:
+                    false_positives += 1
 
-        return prediction_results
+                positive_bag_indexes.append(i)
 
-    def train(self, threshold, perform_scaling=False, runs=10, k=5):
+            else:
+                if bags[i].is_positive():
+                    false_negatives += 1
+                else:
+                    true_negatives += 1
+
+        return PredictionResult(
+            bags=positive_bag_indexes,
+            actual_positive_bags=actual_positive_bags,
+            actual_negative_bags=actual_negative_bags,
+            true_positives=true_positives,
+            true_negatives=true_negatives,
+            false_positives=false_positives,
+            false_negatives=false_negatives,
+            accuracy=(true_positives + true_negatives) / total_bags,
+            precision=true_positives / (true_positives + false_positives),
+            recall=true_positives / (true_positives + false_negatives)
+        )
+
+    def train(self, perform_scaling=False, k=5):
         results = []
 
         for bag in self.training_data.training_bags:
             for instance in bag.instances:
                 instance.used_as_target = False
 
-        for i in range(0, runs):
-            run_results = []
+        for partition_number in range(0, 10):
+            partition_results = []
 
-            for j in range(0, k):
-                random_instance = self.training_data.random_positive_training_bag().random_unused_instance()
-                random_instance.used_as_target = True
+            validation_and_training_set = self.training_data.validation_and_training_set(partition_number)
+            validation_set = validation_and_training_set["validation_set"]
+            training_set = validation_and_training_set["training_set"]
 
-                run_results.append(self.run(
-                    threshold, perform_scaling, random_instance.features, numpy.ones(random_instance.features.size)
-                ))
+            random_positive_bags = list(
+                map(lambda x: self.training_data.random_positive_training_bag(partition_number), range(0, k))
+            )
 
-            best_result = sorted(run_results, key=lambda r: r.density)[0]
-            print("Run", i, "Target:", best_result.target, "Scale:", best_result.scale, "Density", best_result.density)
+            for random_positive_bag in random_positive_bags:
+                for instance in random_positive_bag:
+                    partition_results.append(self.run(
+                        perform_scaling,
+                        training_set,
+                        instance.features,
+                        numpy.full(instance.features.size, 0.1)
+                    ))
+
+            accuracy = 0
+            for partition_result in partition_results:
+                prediction_result = EMDD.classify(validation_set, partition_result.target, partition_result.scale)
+                if prediction_result.accuracy > accuracy:
+                    accuracy = prediction_result.accuracy
+                    best_result = partition_result
+
+            print("Partition {}: Target: {} Scale: {} Density: {}".format(
+                partition_number, best_result.target, best_result.scale, best_result.density
+            ))
             results.append(best_result)
 
         return results
 
-    def run(self, threshold, perform_scaling, target, scale):
+    def run(self, perform_scaling, bags, target, scale):
         density_difference = math.inf
         previous_density = math.inf
         density = 0
 
-        while density_difference > threshold:
+        while density_difference > training_threshold:
 
             optimal_instances = []
-            for bag in self.training_data.training_bags:
+            for bag in bags:
                 probabilities = EMDD.positive_instance_probability(target, scale, bag.instances)
                 #print("run", run, "positive", bag.is_positive(), "bag", bag.index, "instance", numpy.argmax(probabilities), "probability", probabilities[numpy.argmax(probabilities)])
                 optimal_instances.append(bag.instances[numpy.argmax(probabilities)])
@@ -236,10 +297,32 @@ class MatlabTrainingData:
         data = handler(scipy.io.loadmat(file_name))
 
         self.training_bags = data["training_bags"]
+
+        # setting up partitions for 10-fold cross-validation
+        training_bags = self.training_bags[:]
+        random.shuffle(training_bags)
+
+        self.partitions = {}
+        for i in range(0, 10):
+
+            self.partitions[i] = []
+            for j in range(i * 10, min((i + 1) * 10, len(training_bags))):
+                self.partitions[i].append(training_bags[j])
+
         self.test_bags = data["test_bags"]
 
-    def random_positive_training_bag(self):
-        positive_training_bags = [bag for bag in self.training_bags if bag.is_positive() and bag.is_unused()]
+    def validation_and_training_set(self, partition_number):
+        return {
+            "validation_set": self.partitions[partition_number],
+            "training_set": [bag for partition in list(
+                map(lambda x: self.partitions[x], [j for j in range(0, 10) if j != partition_number])
+            ) for bag in partition]
+        }
+
+    def random_positive_training_bag(self, partition_number):
+        training_set = self.validation_and_training_set(partition_number)["training_set"]
+
+        positive_training_bags = [bag for bag in training_set if bag.is_positive() and bag.is_unused()]
         return positive_training_bags[random.randrange(0, len(positive_training_bags))]
 
 
@@ -331,7 +414,7 @@ def load_dr_data(mat):
 
 
 def load_musk_data(mat):
-    pp.pprint(mat)
+    #pp.pprint(mat)
 
     bag_map = {}
     it_bag_ids = numpy.nditer(mat["bag_ids"], ["refs_ok", "c_index"])
@@ -355,7 +438,8 @@ def load_musk_data(mat):
 
 
 def load_animal_data(mat):
-    pp.pprint(mat)
+    #pp.pprint(mat)
+
     bag_map = {}
     it_bag_ids = numpy.nditer(mat["bag_ids"], ["refs_ok", "c_index"])
     while not it_bag_ids.finished:
@@ -373,7 +457,7 @@ def load_animal_data(mat):
         bag.add_instance(instance)
 
         inst_list = list(map(lambda x: str(x), instance.tolist()))
-        print("INST_{}_{},BAG_{},{},{}".format(len(bag.instances), bag_index, bag_index, label, ",".join(inst_list)))
+        #print("INST_{}_{},BAG_{},{},{}".format(len(bag.instances), bag_index, bag_index, label, ",".join(inst_list)))
 
         if not bag.is_positive() and label == 1:
             bag.label = 1
@@ -418,57 +502,33 @@ def load_fake_data(mat):
 # Comment and uncomment as needed
 
 #training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data) # for fake data
-#training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data) # musk1
+training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
 #training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
 #training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
 #training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_animal_data) # elephant
 #training_data = MatlabTrainingData('training-data/fox_100x100_matlab.mat', load_animal_data) # fox
-training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
-
-runs = 10
-
-print(runs, "runs")
+#training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
 
 emdd = EMDD(training_data)
-results = emdd.train(0.1, perform_scaling=True, runs=runs)
+training_results = emdd.train(perform_scaling=True)
 
 test_bags = training_data.training_bags
 
-threshold = 0.5
 
-prediction_results = EMDD.predict(results=results, bags=test_bags, threshold=threshold, aggregate=Aggregate.avg)
+prediction_result = EMDD.predict(results=training_results, bags=test_bags, aggregate=Aggregate.avg)
 
-actual_positive_instances = len([bag for bag in test_bags if bag.is_positive()])
-
-true_positives = 0
-false_positives = 0
-
-positive_bag_indexes = list(map(lambda x: x.index, [bag for bag in test_bags if bag.is_positive()]))
-negative_bag_indexes = list(map(lambda x: x.index, [bag for bag in test_bags if not bag.is_positive()]))
-predicted_positive_bag_indexes = []
-
-for prediction_result in prediction_results:
-
-    predicted_positive_bag_indexes.append(prediction_result.bag)
-    if test_bags[prediction_result.bag].is_positive():
-        true_positives += 1
-    else:
-        false_positives += 1
-
-false_negatives = len([index for index in positive_bag_indexes if index not in predicted_positive_bag_indexes])
-true_negatives = len([index for index in negative_bag_indexes if index not in predicted_positive_bag_indexes])
-
-print("Threshold", threshold)
+print("Threshold", prediction_threshold)
 print("Total bags", len(test_bags))
-print("Total positive bags", actual_positive_instances)
-print("Total negative bags", len(negative_bag_indexes))
-print("Total predicted positive bags", len(prediction_results))
-print("Total predicted negative bags", true_negatives)
-print("True positives", true_positives)
-print("False positives", false_positives)
-print("False negatives", false_negatives)
-print("Accuracy", (true_positives + true_negatives) / len(test_bags))
-print("Precision", true_positives / (true_positives + false_positives))
-print("Recall", true_positives / (true_positives + false_negatives))
+print("Total positive bags", prediction_result.actual_positive_bags)
+print("Total negative bags", prediction_result.actual_negative_bags)
+print("Total predicted positive bags", len(prediction_result.bags))
+print("Total predicted negative bags", len(test_bags) - len(prediction_result.bags))
+print("True positives", prediction_result.true_positives)
+print("False positives", prediction_result.false_positives)
+print("True negatives", prediction_result.true_negatives)
+print("False negatives", prediction_result.false_negatives)
+print("Accuracy", prediction_result.accuracy)
+print("Precision", prediction_result.precision)
+print("Recall", prediction_result.recall)
