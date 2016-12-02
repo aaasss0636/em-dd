@@ -364,9 +364,18 @@ def load_animal_data(mat):
             bag_map[bag_index] = Bag(bag_index, -1)
 
         bag = bag_map[bag_index]
-        bag.add_instance(numpy.array(mat["features"][it_bag_ids.index].A[0]))
+        instance = numpy.array(mat["features"][it_bag_ids.index].A[0])
 
-        if not bag.is_positive() and mat["labels"].A[0][it_bag_ids.index] == 1:
+        label = mat["labels"].A[0][it_bag_ids.index]
+        if label != 1:
+            label = 0
+
+        bag.add_instance(instance)
+
+        inst_list = list(map(lambda x: str(x), instance.tolist()))
+        print("INST_{}_{},BAG_{},{},{}".format(len(bag.instances), bag_index, bag_index, label, ",".join(inst_list)))
+
+        if not bag.is_positive() and label == 1:
             bag.label = 1
 
         it_bag_ids.iternext()
@@ -413,10 +422,10 @@ def load_fake_data(mat):
 #training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
 #training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
 #training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
-training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
+#training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
 #training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_animal_data) # elephant
 #training_data = MatlabTrainingData('training-data/fox_100x100_matlab.mat', load_animal_data) # fox
-#training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
+training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
 
 runs = 10
 
