@@ -4,6 +4,7 @@ import numpy
 import math
 import random
 import pprint
+import sys
 from collections.abc import Sequence
 from collections import namedtuple
 from enum import Enum
@@ -122,9 +123,12 @@ class EMDD:
             recall=recall
         )
 
-    def train(self, perform_scaling=False, k=5):
+    def train(self, perform_scaling=False):
         results = []
 
+        accuracy_sum = 0
+        precision_sum = 0
+        recall_sum = 0
         for partition_number in range(0, 10):
             for bag in self.training_data.training_bags:
                 for instance in bag.instances:
@@ -136,21 +140,28 @@ class EMDD:
             validation_set = validation_and_training_set["validation_set"]
             training_set = validation_and_training_set["training_set"]
 
-            random_positive_bags = list(
-                map(lambda x: self.training_data.random_positive_training_bag(partition_number), range(0, k))
-            )
+            positive_training_bags = [bag for bag in training_set if bag.is_positive()]
+            random.shuffle(positive_training_bags)
 
-            instances_per_bag = len(self.training_data.training_bags[0].instances)
-            print("Cross-validation on partition", partition_number, "with", instances_per_bag * k, "instances")
+            k = 10
+            #k = len(positive_training_bags)
+            #k = min(5, len(positive_training_bags))
+            #if len(positive_training_bags) >= 30:
+            #    k = round(len(positive_training_bags) / 5)
+
+            random_positive_bags = list(map(lambda x: positive_training_bags[x], range(0, k)))
+
+            total_instances = sum([len(bag.instances) for bag in random_positive_bags])
+            print("Cross-validation on partition", (partition_number + 1), "with", total_instances, "instances")
             instance_number = 1
             for random_positive_bag in random_positive_bags:
                 for instance in random_positive_bag:
-                    if instance_number % 5 == 0:
+                    if instance_number % 10 == 0:
                         print(instance_number, end="", flush=True)
                     else:
                         print(".", end="", flush=True)
 
-                    partition_results.append(self.run(
+                    partition_results.append(EMDD.run(
                         perform_scaling,
                         training_set,
                         instance.features,
@@ -162,22 +173,38 @@ class EMDD:
             print("")
 
             accuracy = 0
+            precision = 0
+            recall = 0
             for partition_result in partition_results:
                 prediction_result = EMDD.classify(validation_set, partition_result.target, partition_result.scale)
                 if prediction_result.accuracy > accuracy:
                     accuracy = prediction_result.accuracy
+                    precision = prediction_result.precision
+                    recall = prediction_result.recall
+
                     best_result = partition_result
 
-            print("Partition {}: Target: {} Scale: {} Density: {}".format(
-                partition_number, best_result.target, best_result.scale, best_result.density
+            accuracy_sum += accuracy
+            precision_sum += precision
+            recall_sum += recall
+
+            print("Partition {}: Density: {} Accuracy: {} Precision: {} Recall: {}".format(
+                partition_number, best_result.density, accuracy, precision, recall
             ))
             results.append(best_result)
 
+        print("Across 10-fold cross-validation:")
+        print("Average accuracy:", (accuracy_sum / 10))
+        print("Average precision:", (precision_sum / 10))
+        print("Average recall:", (recall_sum / 10))
+
         return results
 
-    def run(self, perform_scaling, bags, target, scale):
+    @staticmethod
+    def run(perform_scaling, bags, target, scale):
         density_difference = math.inf
         previous_density = math.inf
+        best_density = math.inf
         density = 0
 
         while density_difference > training_threshold:
@@ -209,8 +236,8 @@ class EMDD:
                 method='L-BFGS-B',
                 options={
                     'ftol': 1.0e-06,
-                    'maxfun': 50000,
-                    'maxiter': 1000,
+                    'maxfun': 100000,
+                    'maxiter': 2000,
                 }
             )
 
@@ -223,8 +250,15 @@ class EMDD:
                 scale = numpy.ones(target.size)
 
             density = result.fun
-            density_difference = (previous_density - density)
-            previous_density = density
+            if density < best_density:
+                density_difference = best_density - density
+                best_density = density
+                previous_density = density
+            else:
+                density_difference = previous_density - density
+                if density_difference != 0:
+                    density_difference = 2 * training_threshold
+                    previous_density = density
 
         return EMDDResult(target=target, scale=scale, density=density)
 
@@ -341,11 +375,6 @@ class MatlabTrainingData:
             ) for bag in partition]
         }
 
-    def random_positive_training_bag(self, partition_number):
-        training_set = self.validation_and_training_set(partition_number)["training_set"]
-        positive_training_bags = [bag for bag in training_set if bag.is_positive() and bag.is_unused()]
-        return positive_training_bags[random.randrange(0, len(positive_training_bags))]
-
 
 class Bags(Sequence):
 
@@ -371,14 +400,6 @@ class Bag(Sequence):
 
     def is_positive(self):
         return self.label == 1
-
-    def is_unused(self):
-        return len([instance for instance in self.instances if instance.used_as_target is False]) > 0
-
-    def random_unused_instance(self):
-        unused_instances = [instance for instance in self.instances if instance.used_as_target is False]
-
-        return unused_instances[random.randrange(0, len(unused_instances))]
 
     def __getitem__(self, index):
         return self.instances[index]
@@ -421,9 +442,10 @@ def load_data(mat, bags_key, labels_key):
 
 
 def load_synth_data(mat):
+    bags = load_data(mat, "bag", "labels")
     return {
-        "training_bags": load_data(mat, "bag", "labels"),
-        "test_bags": []
+        "training_bags": bags,
+        "test_bags": bags
     }
 
 
@@ -520,31 +542,53 @@ def load_fake_data(mat):
         "test_bags": bags
     }
 
-# Comment and uncomment as needed
 
-#training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data) # for fake data
-training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data) # musk1
-#training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data) # musk1
-#training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data) # synth data 1
-#training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data) # synth data 4
-#training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data) # DR data
-#training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_animal_data) # elephant
-#training_data = MatlabTrainingData('training-data/fox_100x100_matlab.mat', load_animal_data) # fox
-#training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data) # tiger
+def get_training_data(data_set):
+    if data_set == "fake":
+        training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_fake_data)
+    elif data_set == "musk1":
+        training_data = MatlabTrainingData('training-data/musk1norm_matlab.mat', load_musk_data)
+    elif data_set == "musk2":
+        training_data = MatlabTrainingData('training-data/musk2norm_matlab.mat', load_musk_data)
+    elif data_set == "synth1":
+        training_data = MatlabTrainingData('training-data/synth_data_1.mat', load_synth_data)
+    elif data_set == "synth4":
+        training_data = MatlabTrainingData('training-data/synth_data_4.mat', load_synth_data)
+    elif data_set == "dr":
+        training_data = MatlabTrainingData('training-data/DR_data.mat', load_dr_data)
+    elif data_set == "elephant":
+        training_data = MatlabTrainingData('training-data/elephant_100x100_matlab.mat', load_animal_data)
+    elif data_set == "fox":
+        training_data = MatlabTrainingData('training-data/fox_100x100_matlab.mat', load_animal_data)
+    elif data_set == "tiger":
+        training_data = MatlabTrainingData('training-data/tiger_100x100_matlab.mat', load_animal_data)
+    else:
+        raise ValueError("Unknown data set. Use one of fake, musk1, musk2, synth1, synth4, dr, elephant, tiger, or fox")
+
+    return training_data
+
+if len(sys.argv) == 1:
+    raise ValueError("Please provide the name of the data set as an argument")
+
+
+training_data = get_training_data(sys.argv[1])
 
 emdd = EMDD(training_data)
 training_results = emdd.train(perform_scaling=True)
 
-test_bags = training_data.training_bags
+test_bags = training_data.test_bags
+total_bags = len(test_bags)
 
 prediction_result = EMDD.predict(results=training_results, bags=test_bags, aggregate=Aggregate.avg)
 
+print("Classifying against test set")
+print("")
 print("Threshold", prediction_threshold)
-print("Total bags", len(test_bags))
+print("Total bags", total_bags)
 print("Total positive bags", prediction_result.actual_positive_bags)
 print("Total negative bags", prediction_result.actual_negative_bags)
 print("Total predicted positive bags", len(prediction_result.bags))
-print("Total predicted negative bags", len(test_bags) - len(prediction_result.bags))
+print("Total predicted negative bags", total_bags - len(prediction_result.bags))
 print("True positives", prediction_result.true_positives)
 print("False positives", prediction_result.false_positives)
 print("True negatives", prediction_result.true_negatives)
