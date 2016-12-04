@@ -65,7 +65,7 @@ Email: tkhairna@asu.edu}}
 \maketitle
 
 \begin{abstract}
-In this paper, investigate and implement the Expectation Maximization Diverse Density (EM-DD)\cite{zhang2001dd} algorithm, and compare its performance to other, similar algorithms. EM-DD is an approach that has seen significant success in Multiple-Instances Learning problems and is a generalization of the supervised-learning classification-problem. Our goal is to demonstrate an understanding of this algorithm by providing a valid implementation and demonstrating its performance against various data sets.
+In this paper, we investigate and implement the Expectation Maximization Diverse Density (EM-DD)\cite{zhang2001dd} algorithm, and compare its performance to other, similar algorithms. EM-DD is an approach that has seen significant success in Multiple-Instances Learning problems and is a generalization of the supervised-learning classification-problem. Our goal is to demonstrate an understanding of this algorithm by providing a valid implementation and measuring its performance against various data sets. We will also compare the performance of the EM-DD algorithm against the MatLab MIL-toolkit implementation.
 \end{abstract}
 
 
@@ -83,9 +83,9 @@ We successfully implemented the EM-DD algorithm using the Python programming-lan
 
 While implementing the algorithm, the initial issues that we ran into were due to unfamiliarity with SciPy, and were quickly resolved. Later we also noticed that our classification performance was not as good as we expected. Initially, we were using \texttt{scipy.optimize.minimize} with a numerically-estimated gradient. To address performance problems, the documentation suggested the use of an explicitly-defined gradient function. We followed the suggestion and provided such a function, which seemed to not only improve performance, but also significantly decreased training-time. Another reason for the discrepancy was that by default, the EM-DD algorithm as implemented in the MILL toolkit, uses the average of the estimated target and scale vectors from each cross-validation run during prediction. In contrast, our implementation used the target and scale vector corresponding to the best diverse-density. By changing our implementation to instead use the average of the results, we were able to further increase performance.
 
-Since the EM-DD algorithm as described uses 10-fold cross-validation, we employed the same method as well. However the algorithm, as described, does not use the entire training-set during each cross-validation run. Instead, it randomly chooses up to $k$ positive bags from the training set and then uses each instance as a hypothesis. Unfortunately, no information was provided regarding an ideal value of $k$. With some experimentation, we settled on using $k = 10$; using larger values of $k$, or even setting $k$ to the total number of positive instances in the training-set for that validation run, only seemed to increase the training-time without any appreciable improvement in accuracy. An issue we noticed here, was that the accuracy performance reported by the MILL toolkit is based on the average accuracy of the classifier against when run against each validation set in the 10-fold cross-validation. In contrast, we were reporting our accuracy based only on classification against the \textit{entire} set. By changing our accuracy calculation to be more in line with the original implementation, we started seeing results more in line with what we expected.
+Since the EM-DD algorithm as described uses 10-fold cross-validation, we employed the same method as well. However the algorithm, as described, does not use the entire training-set during each cross-validation run. Instead, it randomly chooses up to $k$ positive bags from the training set and then uses each instance as a hypothesis. Unfortunately, no information was provided regarding an ideal value of $k$. With some experimentation, we settled on using $k = 10$; using larger values of $k$, or even setting $k$ to the total number of positive instances in the training-set for that validation run, only seemed to increase the training-time without any appreciable improvement in accuracy. An issue we noticed here, was that the accuracy performance reported in the original paper is based on the average accuracy of the classifier against when run against each validation set in the 10-fold cross-validation. In contrast, we were reporting our accuracy based only on classification against the \textit{entire} set. By changing our accuracy calculation to be more in line with the original implementation, we started seeing results closer to what we expected, even to the point where it seems that our reported average-accuracy (across 10-fold cross-validation) seemed to be better than the implementation in the MILL toolkit.
 
-Our implementation of the EM-DD algorithm has some minor differences when compared to the implementation in the MILL toolkit. In the EM portion, the MILL toolkit stops iteration when the difference between the current density and the previous one falls below a certain threshold. On each iteration, it will compare the previous to the current density, and then set the value of the previous density to the current one in preparation for the next iteration. In contrast, our implementation will only update the value of the previous density if the current density is better. In our implementation, the iteration will terminate if the difference is below a certain threshold, or if there is no change in density. We also calculate precision and recall in addition to accuracy.
+Our implementation of the EM-DD algorithm has some differences when compared to the implementation in the MILL toolkit. In the EM portion, the MILL toolkit stops iteration when the difference between the current density and the previous one falls below a certain threshold. On each iteration, it will compare the previous density to the current one, and then set the value of the previous density to the current one in preparation for the next iteration. In contrast, our implementation will only update the value of the previous density if the current density is better. In our implementation, the iteration will terminate if the difference is below a certain threshold, or if there is no change in density. We also calculate precision and recall in addition to accuracy. Furthermore, we also employ 10-fold cross-validation like the original implementation, to calculate our average accuracy; the MILL toolkit implementation does not seem to employ a similar technique.
 \begin{figure}
 \caption{Program output from \texttt{emdd.py}}~\label{fig:emdd-output}
 \begin{Verbatim}[fontsize=\tiny,frame=single]
@@ -171,7 +171,7 @@ Precision 0.6875
 Recall 0.9361702127659575
 \end{Verbatim}
 \end{figure}
-In general, our Python implementation, while correct, does not seem to approach the level of accuracy as described in the original paper. A more thorough explanation of the discrepancy, and a rationale are provided in the results section. A portion of the output from our implementation is also shown in Figure \ref{fig:emdd-output}.
+In general, our Python implementation, while correct, does not seem to approach the level of accuracy as described in the original paper, although in some instances it seems to perform better than the MILL implementation. A more thorough explanation of the discrepancy, and a rationale are provided in the results section. A portion of the output from our implementation is also shown in Figure \ref{fig:emdd-output}.
 
 \section{Discussion and Analysis}
 
@@ -211,26 +211,9 @@ Citation-kNN\cite{wang2000solving} is an approach that adapts the standard kNN a
 
 \section{Results}
 
-We compared the performance of our EM-DD implementation against MILL toolkit's implementation for the following data-sets:
-\begin{itemize}
-    \item Synthetic Data\cite{SynthDataset}
-    \item MUSK1\cite{MUSK1Dataset} and MUSK2\cite{MUSK2Dataset}
-    \item Diabetic Retinopathy Data\cite{SynthDataset}
-    \item Elephant, Fox, and Tiger\cite{andrews2002support}
-\end{itemize}
-
-Synthetic data was a data-set that was provided to us, and is meant to be a "control" data-set that we can use to easily compare our algorithm's performance to the MILL implementation. MUSK1 and MUSK2 contain features that describe the conformation of a particular kind of molecule, some of which are "musks" (a certain kind of aromatic compound) and others are not. The diabetic-retinopathy data-set contains scans of individuals with and without diabetic retinopathy, which is a complication arising from diabetes, that causes damage to the retina. The elephant, fox, and tiger data-set each consist of images; each bag contains multiple instances that are sections of a single image. Some of the images in the data-set are images of the corresponding animal, while others are not. 
-
-To compare the performance of our implementation against other MIL algorithms, we only used the MUSK1 data-set. This was due to a lack of time, as some of these algorithms were taking a while to run. In addition, we ran into various errors while trying these data-sets against the MILL toolkit implementations of these algorithms. The problems were difficult to solve due to our lack of familiarity with MatLab. Since use of the MUSK1 data-set did not seem to present any such problems, we decided to restrict our comparisons to just that data set; the results can be seen in table \ref{musk1-comparison}.
-
-To evaluate the performance of our algorithm against the MIL toolkit, we used all data-sets. The results can be seen in.
-
-% Please add the following required packages to your document preamble:
-% \usepackage[table,xcdraw]{xcolor}
-% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
 \begin{table}[t]
 \centering
-\caption{Comparison of accuracy on MUSK1 data-set accross EM-DD implementations and other MIL algorithms}
+\caption{Comparison of accuracy on MUSK1 data-set between EM-DD implementations and other MIL algorithms}
 \label{musk1-comparison}
 \resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
 \hline
@@ -248,11 +231,217 @@ Citation-kNN                     & 90.4\%                                       
 \end{tabular}}
 \end{table}
 
-While our algorithm seemed to outperform the MILL implementation, it does not approach the accuracy described in the original paper. It is also important to note that the accuracy reported is no absolute - we observed that there seemed to be an upper and lower-bound for the accuracy that seemed to be dependent on the $k$ bags that were chosen before the EM portion of the algorithm. Furthermore, we also shuffle the bags before we divide them into partitions for 10-fold cross-validation, and this could slightly affect the results as well. A possibility for future investigation would be to record accuracy over multiple runs to examine how it varies, and to see if it might be possible to establish an upper and lower bound. Regarding the accuracy with respect to the original implementation, we feel that it might be due to shortcomings in \textit{scipy.optimize.minimize}. In contrast to MatLab's \textit{fpmincon}, the SciPy optimizer lacks certain heuristics and optimizations that its MatLab counterpart uses. However, we have been able to verify that our implementation is essentially correct by testing it on a degenerate, clearly-separable set. Hence, one possible-solution to increase accuracy might be to use an external, more-performan solver, or investigate the use of MatLab bindings in SciPy.
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Comparison of accuracy between Python and MILL implementation of EM-DD on multiple data-sets}
+\label{em-dd-comparison}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data Set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Accuracy (Python)}} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Accuracy (MILL)}} \\ \hline
+MUSK1                           & 86\%                                                                                  & 84.9\%                                                                              \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 1            & 79\%                                                                                  & 73.25\%                                                                             \\ \hline
+Synthetic data-set 4            & 76\%                                                                                  & 82.4\%                                                                              \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Diabetic-retinopathy data-set   & 83\%                                                                                  & 55.05\%                                                                             \\ \hline
+\end{tabular}}
+\end{table}
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Accuracy for Python EM-DD implementation on all data-sets}
+\label{em-dd-accuracy}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data Set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Accuracy}} \\ \hline
+MUSK1                           & 86\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 80.99\%                                                                      \\ \hline
+Synthetic data-set 1            & 79\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 76\%                                                                         \\ \hline
+Diabetic-retinopathy data       & 83\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 92\%                                                                         \\ \hline
+Tiger                           & 85\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Fox                             & 78\%                                                                         \\ \hline
+\end{tabular}}
+\end{table}
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Precision for Python EM-DD implementation on all data-sets}
+\label{em-dd-precision}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data Set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Precision}} \\ \hline
+MUSK1                           & 85.33\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 89.66\%                                                                       \\ \hline
+Synthetic data-set 1            & 85.5\%                                                                        \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 80.5\%                                                                        \\ \hline
+Diabetic-retinopathy data       & 86.73\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 94.4\%                                                                        \\ \hline
+Tiger                           & 89.33\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Fox                             & 79.4\%                                                                        \\ \hline
+\end{tabular}}
+\end{table}
+
+
+
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Recall for Python EM-DD implementation on all data-sets}
+\label{em-dd-recall}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data Set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Recall}} \\ \hline
+MUSK1                           & 72.54\%                                                                    \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 57\%                                                                       \\ \hline
+Synthetic data-set 1            & 70.73\%                                                                    \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 74.75\%                                                                    \\ \hline
+Diabetic-retinopathy data       & 85.9\%                                                                     \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 90.25\%                                                                    \\ \hline
+Tiger                           & 79.16\%                                                                    \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Fox                             & 73.8\%                                                                     \\ \hline
+\end{tabular}}
+\end{table}
+
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Accuracy for Python EM-DD implementation on all data-sets, over the entire set}
+\label{em-dd-accuracy-full}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Accuracy}} \\ \hline
+MUSK1                           & 75\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 64.7\%                                                                       \\ \hline
+Synthetic data-set 1            & 50\%                                                                         \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 50\%                                                                         \\ \hline
+Diabetic-retinopathy data       & 61.3\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 59.5\%                                                                       \\ \hline
+Fox                             & 52.5\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Tiger                           & 50.5\%                                                                       \\ \hline
+\end{tabular}}
+\end{table}
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[t]
+\centering
+\caption{Precision for Python EM-DD implementation on all data-sets, over the entire set}
+\label{em-dd-precision-full}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Precision}} \\ \hline
+MUSK1                           & 68.75\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 52.94\%                                                                       \\ \hline
+Synthetic data-set 1            & 50\%                                                                          \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 50\%                                                                          \\ \hline
+Diabetic-retinopathy data       & 61.3\%                                                                        \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 55.25\%                                                                       \\ \hline
+Fox                             & 51.31\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Tiger                           & 50.26\%                                                                       \\ \hline
+\end{tabular}}
+\end{table}
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+\begin{table}[]
+\centering
+\caption{Recall for Python EM-DD implementation on all data-sets, over the entire set}
+\label{em-dd-recall-full}
+\resizebox{\columnwidth}{!}{\begin{tabular}{|l|r|}
+\hline
+\rowcolor[HTML]{333333} 
+{\color[HTML]{FFFFFF} Data set} & \multicolumn{1}{l|}{\cellcolor[HTML]{333333}{\color[HTML]{FFFFFF} Recall}} \\ \hline
+MUSK1                           & 93.61\%                                                                    \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+MUSK2                           & 69.23\%                                                                    \\ \hline
+Synthetic data-set 1            & 100\%                                                                      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Synthetic data-set 4            & 100\%                                                                      \\ \hline
+Diabetic-retinopathy data       & 100\%                                                                      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Elephant                        & 100\%                                                                      \\ \hline
+Fox                             & 98\%                                                                       \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Tiger                           & 97\%                                                                       \\ \hline
+\end{tabular}}
+\end{table}
+
+
+We compared the performance of our EM-DD implementation against MILL toolkit's implementation for the following data-sets:
+\begin{itemize}
+    \item Synthetic Data\cite{SynthDataset}
+    \item MUSK1\cite{MUSK1Dataset} and MUSK2\cite{MUSK2Dataset}
+    \item Diabetic Retinopathy Data\cite{SynthDataset}
+    \item Elephant, Fox, and Tiger\cite{andrews2002support}
+\end{itemize}
+
+The synthetic data mentioned above is a data-set that was provided to us, and is different from the degenerate, clearly-separable data-set that we used to establish the correctness of our implementation. The provided synthetic data-set is meant to be a "control" data-set that we can use to easily compare our algorithm's performance to the MILL implementation. MUSK1 and MUSK2 data-sets contain features that describe the conformation of a particular kind of molecule, some of which are "musks" (a certain kind of aromatic compound) and others are not. The diabetic-retinopathy data-set contains scans of individuals with and without diabetic retinopathy, which is a complication arising from diabetes, that causes damage to the retina. The Elephant, Fox, and Tiger data-sets each consist of images; each bag contains multiple instances that are sections of a single image. Some of the images in the data-set are images of the corresponding animal, while others are not. 
+
+To compare the performance of our implementation against other MIL algorithms, we only used the MUSK1 data-set. This was due to a lack of time, as some of these algorithms took an especially-long time to run. We also ran into various errors while trying these data-sets against the MILL toolkit implementations of these algorithms. The problems were difficult to solve due to our lack of familiarity with MatLab. Since use of the MUSK1 data-set did not seem to present any such problems, we decided to restrict our comparisons to just that data set; the results can be seen in table \ref{musk1-comparison}.
+
+% Please add the following required packages to your document preamble:
+% \usepackage[table,xcdraw]{xcolor}
+% If you use beamer only pass "xcolor=table" option, i.e. \documentclass[xcolor=table]{beamer}
+
+To evaluate the performance of our algorithm against the MILL toolkit, we used synthetic data, MUSK1, and diabetic-retinopathy data. We wanted to perform a more complete comparison across all data-sets. Unfortunately, the MILL implementation of the EM-DD algorithm took an exceptionally-long time to run on the MUSK2, Elephant, Fox, and Tiger data-sets without seeming to complete, and in some cases would cause MatLab to freeze. The results of the comparison between our EM-DD implementation and the MILL one can be seen in table \ref{em-dd-comparison}.
+
+While our implementation seemed to outperform the MILL implementation in some instances, it does not approach the accuracy described in the original paper. It is also important to note that the accuracy reported is not absolute - we observed that there seemed to be an upper and lower-bound for the accuracy that seemed to be dependent on the $k$ bags that were chosen before the EM portion of the algorithm. Furthermore, we also shuffle the bags before we divide them into partitions for 10-fold cross-validation, and this could slightly affect the results as well. A possibility for future investigation would be to record accuracy over multiple runs to examine how it varies, and to see if it might be possible to establish an upper and lower bound. Regarding the accuracy with respect to the original implementation, we feel that it might be due to shortcomings in \texttt{scipy.optimize.minimize}. In contrast to MatLab's \texttt{fpmincon}, the SciPy optimizer lacks certain heuristics and optimizations that its MatLab counterpart uses. However, we have been able to verify that our implementation is essentially correct by testing it on a degenerate, clearly-separable set. Hence, one possible-solution to increase accuracy might be to use an external, more-performan solver, or investigate the use of MatLab bindings in SciPy.
+
+To evaluate the overall performance of our algorithm, we ran it against all of the data sets. The average accuracy reported across 10-fold cross-validation can be seen in table \ref{em-dd-accuracy}. We also calculated the average precision and recall of the implementation against all the data-sets, and the results can be seen in tables \ref{em-dd-precision} and \ref{em-dd-recall}. Interestingly, there seemed to be a large disparity in performance in some cases, when we ran the the classifier against the \textit{entire} data-set. In contrast to the 10-fold averaged cross-validation results, accuracy seemed to be much worse. Note that the target and scale used in the classification in this case is the averaged target and scale from the cross-validation results. For the MUSK1 and MUSK2 data sets, test-data was provided and so we were able to measure our performance against those. For the other data-sets, there was no test-data and so we evaluated the performance of the classifier against the entire test-data set. 
+
+Given our experience with our machine-learning algorithms, we expected the performance to be at least as good as the average result from the 10-fold cross validation, since the classification is against the test set. However, we were surprised to see that this was not necessarily the case. We feel that this might be due to the fact that the classifier learns a threshold between the positive and negative instances, and that this threshold might not generalize appropriately over the entire set. This could be seen when looking at the individual cross-validation results - in some cases accuracy was very low, depending on the bags in the validation set for that particular cross-validation run. In contrast, the MILL implementation has much better accuracy when performing against the entire data-set. This again, might be due to the fact that \texttt{scipy.optimize.minimize} does not perform as well as MatLab's \texttt{fpmincon}. 
+
+A future avenue of exploration to verify this hypothesis, would be to modify the MILL implementation to calculate the average accuracy across 10-fold cross-validation and compare the results to our implementation; we suspect that the performance will be better than our averaged results. The accuracy, precision, and recall across the complete sets of data are shown in tables \ref{em-dd-accuracy-full}, \ref{em-dd-precision-full}, and \ref{em-dd-recall-full}. Note that while the recall on some sets is 100\%, this is not necessarily a good result; this can be seen when looking at the precision (50\%) in those cases. What this means is that the classifier classifies every instance as positive, which leads to 100\% recall, but poor precision. Another possibility for future investigation is to examine the role of the classification-threshold a little more in these situations; the MILL implementation uses a threshold of 50\% to classify an instance as positive or negative. If a particular instance's probability of "closeness" as based on the density is higher than this threshold, it is classified as positive. It may be that in some cases, the threshold of classification for positive instances is much higher than 50\% and so using this higher value might provide better results.
+
 
 \section{Conclusion}
 
-We were able to successfully implement the EM-DD algorithm and compare its performance against the MILL toolkit implementation. In addition, we were also able to compare the performance of our EM-DD implementation against other algorithms that aim to solve the MIL problem. While our implementation's performance does not match the results in the original paper, we note that this is due to limitations in the optimization method used by \textit{scipy.optimize.minimize}, which does not perform as well as MatLab's \textit{fmincon}. Furthermore, we were able to verify that our implementation is essentially correct by testing it against a degenerate, easily-separable, synthetic data-set. Through our implementations, experiments, and comparisons, we feel that we have also been able to demonstrate sufficient understanding and appreciation of this particular machine-learning approach. 
+We were able to successfully implement the EM-DD algorithm and compare its performance against the MILL toolkit implementation. In addition, we were also able to compare the performance of our EM-DD implementation against other algorithms that aim to solve the MIL problem, as well as the EM-DD implementation in the MIL toolkit. We note that our average accuracy across 10-fold cross validation is better than the MIL implementation. However, the MIL implementation performs better across the entire data-set compared to ours. To address these discrepencies and to understand the reason behind them, we feel that it would be useful to perform additional experiments, use a better minimizer, and also examine the role of the threshold used in classifying instances. While our implementation's performance does not match the results in the original paper, we note that this might also be due to limitations in the optimization method used by \texttt{scipy.optimize.minimize}, which does not perform as well as MatLab's \texttt{fmincon}. Furthermore, we were able to verify that our implementation is essentially correct by testing it against a degenerate, easily-separable, synthetic data-set. Through our implementations, experiments, and comparisons, we feel that we have also been able to demonstrate sufficient understanding and appreciation of this particular machine-learning approach. 
 
 % trigger a \newpage just before the given reference
 % number - used to balance the columns on the last page

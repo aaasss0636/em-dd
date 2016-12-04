@@ -1,0 +1,63 @@
+This is BibTeX, Version 0.99d (TeX Live 2015/Debian)
+Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
+The top-level auxiliary file: bare_conf_compsoc.aux
+Case mismatch error between cite keys Scipy and SciPy
+---line 8 of file bare_conf_compsoc.aux
+ : \citation{Scipy
+ :                }
+I'm skipping whatever remains of this command
+The style file: IEEEtran.bst
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Database file #1: IEEEabrv.bib
+Database file #2: main.bib
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+
+Done.
+You've used 9 entries,
+            4087 wiz_defined-function locations,
+            1397 strings with 18894 characters,
+and the built_in function-call counts, 5286 in all, are:
+= -- 416
+> -- 96
+< -- 39
++ -- 54
+- -- 15
+* -- 229
+:= -- 825
+add.period$ -- 18
+call.type$ -- 9
+change.case$ -- 9
+chr.to.int$ -- 96
+cite$ -- 9
+duplicate$ -- 391
+empty$ -- 447
+format.name$ -- 19
+if$ -- 1204
+int.to.chr$ -- 0
+int.to.str$ -- 9
+missing$ -- 70
+newline$ -- 52
+num.names$ -- 9
+pop$ -- 175
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 2
+skip$ -- 416
+stack$ -- 0
+substring$ -- 233
+swap$ -- 288
+text.length$ -- 7
+text.prefix$ -- 0
+top$ -- 5
+type$ -- 9
+warning$ -- 0
+while$ -- 25
+width$ -- 10
+write$ -- 99
+(There was 1 error message)
