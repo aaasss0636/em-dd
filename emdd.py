@@ -29,6 +29,8 @@ pp = pprint.PrettyPrinter(indent=4)
 prediction_threshold = 0.5
 training_threshold = 0.1
 
+cross_validation_k = 10
+
 
 class Aggregate(Enum):
     min = 1
@@ -129,7 +131,7 @@ class EMDD:
         accuracy_sum = 0
         precision_sum = 0
         recall_sum = 0
-        for partition_number in range(0, 10):
+        for partition_number in range(0, cross_validation_k):
             for bag in self.training_data.training_bags:
                 for instance in bag.instances:
                     instance.used_as_target = False
@@ -193,10 +195,10 @@ class EMDD:
             ))
             results.append(best_result)
 
-        print("Across 10-fold cross-validation:")
-        print("Average accuracy:", (accuracy_sum / 10))
-        print("Average precision:", (precision_sum / 10))
-        print("Average recall:", (recall_sum / 10))
+        print("Across {}-fold cross-validation:".format(cross_validation_k))
+        print("Average accuracy:", (accuracy_sum / cross_validation_k))
+        print("Average precision:", (precision_sum / cross_validation_k))
+        print("Average recall:", (recall_sum / cross_validation_k))
 
         return results
 
@@ -354,16 +356,20 @@ class MatlabTrainingData:
 
         self.training_bags = data["training_bags"]
 
-        # setting up partitions for 10-fold cross-validation
+        # setting up partitions for k-fold cross-validation
         training_bags = self.training_bags[:]
         random.shuffle(training_bags)
 
+        bags_per_partition = math.floor(len(training_bags) / cross_validation_k)
+        bag_index = 0
+
         self.partitions = {}
-        for i in range(0, 10):
+        for i in range(0, cross_validation_k):
 
             self.partitions[i] = []
-            for j in range(i * 10, min((i + 1) * 10, len(training_bags))):
+            for j in range(bag_index, min(bag_index + bags_per_partition, len(training_bags))):
                 self.partitions[i].append(training_bags[j])
+                bag_index += 1
 
         self.test_bags = data["test_bags"]
 
@@ -371,7 +377,7 @@ class MatlabTrainingData:
         return {
             "validation_set": self.partitions[partition_number],
             "training_set": [bag for partition in list(
-                map(lambda x: self.partitions[x], [j for j in range(0, 10) if j != partition_number])
+                map(lambda x: self.partitions[x], [j for j in range(0, cross_validation_k) if j != partition_number])
             ) for bag in partition]
         }
 
